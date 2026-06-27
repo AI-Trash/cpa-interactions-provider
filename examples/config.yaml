@@ -12,10 +12,12 @@ plugins:
   enabled: true
   dir: "plugins"
   configs:
-    cpa-interactions-provider:
+    cpa_interactions_provider:
       enabled: true
       priority: 1
       endpoint: "https://generativelanguage.googleapis.com/v1beta/interactions"
+      # Optional for direct plugin-executor routes. You can also set GEMINI_API_KEY.
+      # api_key: "AQ.Ab..."
       store: true
       agents:
         - "antigravity-preview-05-2026"

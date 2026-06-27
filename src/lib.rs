@@ -77,6 +77,7 @@ static HOST: AtomicPtr<CliproxyHostApi> = AtomicPtr::new(ptr::null_mut());
 struct PluginConfig {
     enabled: bool,
     endpoint: String,
+    api_key: String,
     store: bool,
     agents: Vec<String>,
     default_environment: String,
@@ -88,6 +89,7 @@ impl PluginConfig {
         PluginConfig {
             enabled: true,
             endpoint: "https://generativelanguage.googleapis.com/v1beta/interactions".to_string(),
+            api_key: String::new(),
             store: true,
             agents: vec![
                 "antigravity-preview-05-2026".to_string(),
@@ -202,6 +204,7 @@ fn handle_method(method: &str, request: &[u8]) -> Result<Vec<u8>, String> {
             Ok(ok_envelope_bytes(&registration_result()))
         }
         "executor.identifier" => Ok(ok_envelope_bytes(r#"{"identifier":"cpa-interactions-provider"}"#)),
+        "model.static" | "model.for_auth" => static_models(),
         "model.route" => route_model(request),
         "executor.execute" => execute(request, false),
         "executor.execute_stream" => execute(request, true),
@@ -248,6 +251,7 @@ fn apply_config(raw: &[u8]) -> Result<(), String> {
         match key {
             "enabled" => cfg.enabled = parse_bool(val),
             "endpoint" => cfg.endpoint = strip_quotes(val).to_string(),
+            "api_key" => cfg.api_key = strip_quotes(val).to_string(),
             "store" => cfg.store = parse_bool(val),
             "default_environment" => cfg.default_environment = strip_quotes(val).to_string(),
             "route_all_models" => cfg.route_all_models = parse_bool(val),
@@ -324,6 +328,7 @@ fn strip_quotes(s: &str) -> &str {
 
 fn registration_result() -> String {
     let caps = json!({
+        "model_provider": true,
         "model_router": true,
         "executor": true,
         "executor_model_scope": "both",
@@ -333,6 +338,7 @@ fn registration_result() -> String {
     let config_fields = json!([
         {"Name":"enabled","Type":"boolean","Description":"Master switch."},
         {"Name":"endpoint","Type":"string","Description":"Interactions API endpoint URL."},
+        {"Name":"api_key","Type":"string","Description":"Gemini API key for direct plugin-executor routes."},
         {"Name":"store","Type":"boolean","Description":"Store interactions server-side for chaining."},
         {"Name":"agents","Type":"array","Description":"Model names treated as agents (use `agent` field)."},
         {"Name":"default_environment","Type":"string","Description":"Default environment string for agents that require one."},
@@ -350,6 +356,23 @@ fn registration_result() -> String {
         "capabilities": caps,
     });
     serde_json::to_string(&result).expect("serialize registration")
+}
+
+fn static_models() -> Result<Vec<u8>, String> {
+    let result = json!({
+        "Provider": "cpa-interactions-provider",
+        "Models": [{
+            "ID": "antigravity-preview-05-2026",
+            "Object": "model",
+            "OwnedBy": "google",
+            "Type": "chat",
+            "Name": "antigravity-preview-05-2026",
+            "SupportedGenerationMethods": ["chat-completions"],
+            "SupportedInputModalities": ["text"],
+            "SupportedOutputModalities": ["text"]
+        }]
+    });
+    Ok(format!("{{\"ok\":true,\"result\":{}}}", result).into_bytes())
 }
 
 // ============================================================
@@ -486,7 +509,16 @@ fn execute(raw: &[u8], stream: bool) -> Result<Vec<u8>, String> {
     let api_key = auth_attrs
         .and_then(|m| m.get("api_key"))
         .and_then(|v| v.as_str())
-        .unwrap_or("");
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            if cfg.api_key.is_empty() {
+                std::env::var("GEMINI_API_KEY").ok()
+            } else {
+                Some(cfg.api_key.clone())
+            }
+        })
+        .unwrap_or_default();
 
     let host_callback_id = req
         .get("HostCallbackID")
@@ -525,10 +557,12 @@ fn execute(raw: &[u8], stream: bool) -> Result<Vec<u8>, String> {
     let result = env.get("result").ok_or("missing host.http.do result")?;
     let status_code = result
         .get("status_code")
+        .or_else(|| result.get("StatusCode"))
         .and_then(|v| v.as_i64())
         .unwrap_or(0) as i32;
     let resp_body_b64 = result
         .get("body")
+        .or_else(|| result.get("Body"))
         .and_then(|v| v.as_str())
         .ok_or("missing host.http.do body")?;
     let resp_bytes = B64

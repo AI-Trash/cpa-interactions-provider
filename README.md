@@ -39,12 +39,17 @@ CLIProxyAPI's built-in Gemini executor targets the legacy `generateContent` surf
      enabled: true
      dir: "plugins"
      configs:
-       cpa-interactions-provider:
-         enabled: true
-         priority: 1
-         # Optional overrides:
-         endpoint: "https://generativelanguage.googleapis.com/v1beta/interactions"
-         store: true
+      # The key must match the loaded library filename without extension.
+      # Cargo's default Windows output is cpa_interactions_provider.dll;
+      # rename the library to cpa-interactions-provider.dll if you prefer the dashed ID.
+      cpa_interactions_provider:
+        enabled: true
+        priority: 1
+        # Optional overrides:
+        endpoint: "https://generativelanguage.googleapis.com/v1beta/interactions"
+        # Optional for direct plugin-executor routes. You can also set GEMINI_API_KEY.
+        # api_key: "AQ.Ab..."
+        store: true
          agents:
            - "antigravity-preview-05-2026"
            - "deep-research-preview-04-2026"
@@ -62,6 +67,7 @@ CLIProxyAPI's built-in Gemini executor targets the legacy `generateContent` surf
 | `enabled` | boolean | `true` | Master switch. When `false`, the router declines all requests. |
 | `priority` | integer | `1` | Host plugin ordering; higher numbers run earlier for ModelRouter. |
 | `endpoint` | string | `https://generativelanguage.googleapis.com/v1beta/interactions` | Override the upstream Interactions API URL. Use `https://us-central1-aiplatform.googleapis.com/v1/...` for Vertex. |
+| `api_key` | string | empty | Optional Gemini API key used when CLIProxyAPI executes the plugin directly without a selected auth. `GEMINI_API_KEY` is also accepted. |
 | `store` | boolean | `true` | Whether interactions are stored server-side so `previous_interaction_id` chaining works. Set `false` only for stateless debugging. |
 | `agents` | array | `[antigravity-preview-05-2026, deep-research-preview-04-2026, deep-research-max-preview-04-2026]` | Names treated as agents (`agent` field) instead of models. |
 | `default_environment` | string | `remote` | Used when an agent needs an `environment` field but no env ID has been captured yet. Leave empty to omit. |
