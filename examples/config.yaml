@@ -1,0 +1,25 @@
+# Example CLIProxyAPI config for the cpa-interactions-provider plugin
+
+# Configure an auth file (auths/gemini_interactions.json):
+# {
+#   "provider": "gemini_interactions",
+#   "attributes": { "api_key": "AQ.Ab..." }
+# }
+# The host will resolve AuthAttributes["api_key"] and inject it as
+# x-goog-api-key on the upstream call made through host.http.do.
+
+plugins:
+  enabled: true
+  dir: "plugins"
+  configs:
+    cpa-interactions-provider:
+      enabled: true
+      priority: 1
+      endpoint: "https://generativelanguage.googleapis.com/v1beta/interactions"
+      store: true
+      agents:
+        - "antigravity-preview-05-2026"
+        - "deep-research-preview-04-2026"
+        - "deep-research-max-preview-04-2026"
+      default_environment: "remote"
+      route_all_models: true
